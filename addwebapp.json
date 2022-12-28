@@ -1,82 +1,108 @@
 {
-    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
-    "contentVersion": "1.0.0.0",
-    "metadata": {
-      "_generator": {
-        "name": "bicep",
-        "version": "0.12.40.16777",
-        "templateHash": "16004123048193185147"
-      }
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storagePrefix": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 11
     },
-    "parameters": {
-      "webAppName": {
-        "type": "string",
-        "defaultValue": "AzureLinuxApp",
-        "minLength": 2,
-        "metadata": {
-          "description": "Base name of the resource such as web app name and app service plan "
-        }
+    "storageSKU": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Standard_ZRS",
+        "Premium_LRS",
+        "Premium_ZRS",
+        "Standard_GZRS",
+        "Standard_RAGZRS"
+      ]
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "appServicePlanName": {
+      "type": "string",
+      "defaultValue": "exampleplan"
+    },
+    "webAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Base name of the resource such as web app name and app service plan "
       },
+      "minLength": 2
+    },
+    "linuxFxVersion": {
+      "type": "string",
+      "defaultValue": "php|7.0",
+      "metadata": {
+        "description": "The Runtime stack of current web app"
+      }
+    }
+  },
+  "variables": {
+    "uniqueStorageName": "[concat(parameters('storagePrefix'), uniqueString(resourceGroup().id))]",
+    "webAppPortalName": "[concat(parameters('webAppName'), uniqueString(resourceGroup().id))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2021-09-01",
+      "name": "[variables('uniqueStorageName')]",
+      "location": "[parameters('location')]",
       "sku": {
-        "type": "string",
-        "defaultValue": "S1",
-        "metadata": {
-          "description": "The SKU of App Service Plan "
-        }
+        "name": "[parameters('storageSKU')]"
       },
-      "linuxFxVersion": {
-        "type": "string",
-        "defaultValue": "php|7.4",
-        "metadata": {
-          "description": "The Runtime stack of current web app"
-        }
-      },
-      "location": {
-        "type": "string",
-        "defaultValue": "[resourceGroup().location]",
-        "metadata": {
-          "description": "Location for all resources."
-        }
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true
       }
     },
-    "variables": {
-      "webAppPortalName": "[format('{0}-webapp', parameters('webAppName'))]",
-      "appServicePlanName": "[format('AppServicePlan-{0}', parameters('webAppName'))]"
-    },
-    "resources": [
-      {
-        "type": "Microsoft.Web/serverfarms",
-        "apiVersion": "2022-03-01",
-        "name": "[variables('appServicePlanName')]",
-        "location": "[parameters('location')]",
-        "sku": {
-          "name": "[parameters('sku')]"
-        },
-        "kind": "linux",
-        "properties": {
-          "reserved": true
-        }
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2021-03-01",
+      "name": "[parameters('appServicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "B1",
+        "tier": "Basic",
+        "size": "B1",
+        "family": "B",
+        "capacity": 1
       },
-      {
-        "type": "Microsoft.Web/sites",
-        "apiVersion": "2022-03-01",
-        "name": "[variables('webAppPortalName')]",
-        "location": "[parameters('location')]",
-        "kind": "app",
-        "properties": {
-          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]",
-          "siteConfig": {
-            "linuxFxVersion": "[parameters('linuxFxVersion')]",
-            "ftpsState": "FtpsOnly"
-          },
-          "httpsOnly": true
-        },
-        "identity": {
-          "type": "SystemAssigned"
-        },
-        "dependsOn": [
-          "[resourceId('Microsoft.Web/serverfarms', variables('appServicePlanName'))]"
-        ]
+      "kind": "linux",
+      "properties": {
+        "perSiteScaling": false,
+        "reserved": true,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0
       }
-    ]
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2021-03-01",
+      "name": "[variables('webAppPortalName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]"
+      ],
+      "kind": "app",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "siteConfig": {
+          "linuxFxVersion": "[parameters('linuxFxVersion')]"
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "storageEndpoint": {
+      "type": "object",
+      "value": "[reference(variables('uniqueStorageName')).primaryEndpoints]"
+    }
   }
+}
